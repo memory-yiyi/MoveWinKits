@@ -2,6 +2,7 @@
 Set-Location $PSScriptRoot
 [string]$Source = (Read-Host '     Source Path')
 [string]$Destination = (Read-Host 'Destination Path')
+[string]$outFile = "ChangeLog$(Get-Date -Format 'yyMMddhhmmss').reg"
 [string[]]$SD = @()
 @($Source, $Destination) | ForEach-Object {
     $str = $_
@@ -33,7 +34,6 @@ Set-Location $PSScriptRoot
     [string]$str = ''
     [string[]]$strArr = @()
     [bool]$bodyFind = $false
-    [string]$outFile = "ChangeLog$(Get-Date -Format 'yyMMddhhmmss').reg"
 
     Write-Host 'Extract key registry'
     "Windows Registry Editor Version 5.00`n" | Out-File $outFile -Encoding unicode
@@ -59,5 +59,26 @@ Set-Location $PSScriptRoot
     }
     # Prevent missing the last piece of data
     if ($bodyFind) { $strArr | Out-File $outFile -Encoding unicode -Append }
+    if ((Get-Item $outFile).Length -le 76) {
+        Write-Host 'ERROR: Extraction failed, please try again' -ForegroundColor Red
+        exit
+    }
     Write-Host 'OK' -ForegroundColor Green
+}
+
+<# Move and Import #>
+& {
+    Write-Host 'Try to move directory'
+    foreach ($i in 0..1) { $SD[$i] = $SD[$i].Replace('\\', '\') }
+    if (Test-Path $SD[0]) {
+        Move-Item $SD[0] $SD[1]
+        Write-Host 'OK' -ForegroundColor Green
+    }
+    else {
+        Write-Host "ERROR: Not found '$($SD[0])', Please manually move the directory" -ForegroundColor Red
+    }
+
+    Write-Host 'Import reorganization registry' -ForegroundColor Yellow
+    reg import $outFile
+    Remove-Item tmp -Recurse
 }
