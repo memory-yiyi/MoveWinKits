@@ -56,9 +56,9 @@ Set-Location $PSScriptRoot
                 }
             }
         }
+        # Prevent missing the last piece of data
+        if ($bodyFind) { $strArr | Out-File $outFile -Encoding unicode -Append }
     }
-    # Prevent missing the last piece of data
-    if ($bodyFind) { $strArr | Out-File $outFile -Encoding unicode -Append }
     if ((Get-Item $outFile).Length -le 76) {
         Write-Host 'ERROR: Extraction failed, please try again' -ForegroundColor Red
         exit
