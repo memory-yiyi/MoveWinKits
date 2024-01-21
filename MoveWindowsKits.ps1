@@ -2,6 +2,7 @@
 Set-Location $PSScriptRoot
 [string]$Source = (Read-Host '     Source Path')
 [string]$Destination = (Read-Host 'Destination Path')
+[string]$backupFile = "BackupLog$(Get-Date -Format 'yyMMddhhmmss').reg"
 [string]$outFile = "ChangeLog$(Get-Date -Format 'yyMMddhhmmss').reg"
 [string[]]$SD = @()
 @($Source, $Destination) | ForEach-Object {
@@ -32,10 +33,12 @@ Set-Location $PSScriptRoot
 <# Extract key registry #>
 & {
     [string]$str = ''
+    [string[]]$strArrB = @()
     [string[]]$strArr = @()
     [bool]$bodyFind = $false
 
     Write-Host 'Extract key registry'
+    "Windows Registry Editor Version 5.00`n" | Out-File $backupFile -Encoding unicode
     "Windows Registry Editor Version 5.00`n" | Out-File $outFile -Encoding unicode
     Get-ChildItem tmp\*.reg | ForEach-Object {
         foreach ($s in [System.IO.File]::ReadLines($_.FullName, [System.Text.Encoding]::Unicode)) {
@@ -43,21 +46,29 @@ Set-Location $PSScriptRoot
             if ($str[0] -eq '[') {
                 if ($bodyFind) {
                     $bodyFind = $false
+                    $strArrB += ''
+                    $strArrB | Out-File $backupFile -Encoding unicode -Append 
                     $strArr += ''
                     $strArr | Out-File $outFile -Encoding unicode -Append 
                 }      
+                $strArrB = @()
+                $strArrB += $str
                 $strArr = @()
                 $strArr += $str
             }
             else {
                 if ($str -like "*$($SD[0])*") {
                     $bodyFind = $true
+                    $strArrB += $str
                     $strArr += $str.Replace($SD[0], $SD[1])
                 }
             }
         }
         # Prevent missing the last piece of data
-        if ($bodyFind) { $strArr | Out-File $outFile -Encoding unicode -Append }
+        if ($bodyFind) {
+            $strArrB | Out-File $backupFile -Encoding unicode -Append 
+            $strArr | Out-File $outFile -Encoding unicode -Append 
+        }
     }
     if ((Get-Item $outFile).Length -le 76) {
         Write-Host 'ERROR: Extraction failed, please try again' -ForegroundColor Red

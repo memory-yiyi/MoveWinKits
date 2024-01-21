@@ -11,7 +11,15 @@ PowerShell -NoExit -File .\MoveWindowsKits.ps1 -ExecutionPolicy Bypass
 * The path is the parent folder of "Windows Kits". <br>
 For example, if "D:\\Windows Kits", you should enter "D:\\".<br>
 * Both entries follow the above rules.
+## Manual
+* Please manually move when folder move fails.
+* Please manually import `ChangeLogxxx.reg` when registry import fails.
+* When there is an exception, you can manually import `BackupLogxxx.reg` and move the folder to its original location.
+### Note
+You can check the problem through `BackupLogxxx.reg` and report it to the Issue to make the script more comprehensive.
 ## Version Log
+### V2.2
+* Add backup registry. Enable clearer identification of the problem when encountering it.
 ### V2.1
 * Fix some bugs.
 ### V2.0
