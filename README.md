@@ -18,6 +18,8 @@ For example, if "D:\\Windows Kits", you should enter "D:\\".<br>
 ### Note
 You can check the problem through `BackupLogxxx.reg` and report it to the Issue to make the script more comprehensive.
 ## Version Log
+### V2.3
+* Add running checks to reduce the possibility of movement failure.
 ### V2.2
 * Add backup registry. Enable clearer identification of the problem when encountering it.
 ### V2.1

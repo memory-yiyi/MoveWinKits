@@ -1,3 +1,15 @@
+<# Runtime Checks #>
+Write-Host 'Check if it meets the running conditions'
+if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host 'ERROR: Run with non administrator privileges.' -ForegroundColor Red
+    exit
+}
+if (@(Get-Process 'devenv' -ErrorAction SilentlyContinue).Count -ne 0) {
+    Write-Host 'ERROR: Please close Visual Studio.' -ForegroundColor Red
+    exit
+}
+Write-Host 'OK' -ForegroundColor Green
+
 <# Initialize global variables #>
 Set-Location $PSScriptRoot
 [string]$Source = (Read-Host '     Source Path')
