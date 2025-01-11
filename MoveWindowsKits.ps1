@@ -1,107 +1,172 @@
-<# Runtime Checks #>
-Write-Host 'Check if it meets the running conditions'
-if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host 'ERROR: Run with non administrator privileges.' -ForegroundColor Red
-    exit
-}
-if (@(Get-Process 'devenv' -ErrorAction SilentlyContinue).Count -ne 0) {
-    Write-Host 'ERROR: Please close Visual Studio.' -ForegroundColor Red
-    exit
-}
-Write-Host 'OK' -ForegroundColor Green
-
-<# Initialize global variables #>
-Set-Location $PSScriptRoot
-[string]$Source = (Read-Host '     Source Path')
-[string]$Destination = (Read-Host 'Destination Path')
-[string]$backupFile = "BackupLog$(Get-Date -Format 'yyMMddhhmmss').reg"
-[string]$outFile = "ChangeLog$(Get-Date -Format 'yyMMddhhmmss').reg"
-[string[]]$SD = @()
-@($Source, $Destination) | ForEach-Object {
-    $str = $_
-    if ($str -notmatch '\\$') { $str += '\' }
-    $str += 'Windows Kits'
-    $SD += $str.Replace('\', '\\')
-}
-
-<# Getting local information #>
-& {
-    if (-not ((Test-Path $Source) -and (Test-Path $Destination))) {
-        Write-Host 'ERROR: Please enter the correct path.' -ForegroundColor Red
-        exit
+class RuntimeCheck {
+    <# 检查管理员权限 #>
+    hidden static [void] AdministratorCheck() {
+        if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            Write-Host '错误：没有管理员权限' -ForegroundColor Red
+            exit
+        }
     }
-    if (-not (Test-Path tmp)) { New-Item tmp -ItemType Directory }
-    else { Remove-Item tmp\* }
-
-    Write-Host 'Getting system registry'
-    [int[]]$proId = @()
-    @('HKLM', 'HKCU', 'HKCR', 'HKU', 'HKCC') | ForEach-Object {  
-        $proId += (Start-Process $env:ComSpec "/c ""reg export $_ tmp\$_.reg""" -WorkingDirectory $PWD -WindowStyle Hidden -PassThru).Id
+    <# 检查相关程序运行状态 #>
+    hidden static [void] ProgramCheck() {
+        if (@(Get-Process 'devenv', 'blend' -ErrorAction SilentlyContinue).Count -ne 0) {
+            Write-Host '错误：Visual Studio 或 Blend 正在运行' -ForegroundColor Red
+            exit
+        }
     }
-    Wait-Process $proId
-    Write-Host 'OK' -ForegroundColor Green
+    [void] static Execute() {
+        Write-Host '检查代码运行环境'
+        [RuntimeCheck]::AdministratorCheck()
+        [RuntimeCheck]::ProgramCheck()
+        Write-Host '完成' -ForegroundColor Green
+    }
 }
 
-<# Extract key registry #>
-& {
-    [string]$str = ''
-    [string[]]$strArrB = @()
-    [string[]]$strArr = @()
-    [bool]$bodyFind = $false
+class FilePath {
+    hidden [string]$_path
+    hidden [string]$_path2
 
-    Write-Host 'Extract key registry'
-    "Windows Registry Editor Version 5.00`n" | Out-File $backupFile -Encoding unicode
-    "Windows Registry Editor Version 5.00`n" | Out-File $outFile -Encoding unicode
-    Get-ChildItem tmp\*.reg | ForEach-Object {
-        foreach ($s in [System.IO.File]::ReadLines($_.FullName, [System.Text.Encoding]::Unicode)) {
-            $str = $s
-            if ($str[0] -eq '[') {
-                if ($bodyFind) {
-                    $bodyFind = $false
-                    $strArrB += ''
-                    $strArrB | Out-File $backupFile -Encoding unicode -Append 
-                    $strArr += ''
-                    $strArr | Out-File $outFile -Encoding unicode -Append 
-                }      
-                $strArrB = @()
-                $strArrB += $str
-                $strArr = @()
-                $strArr += $str
+    static [hashtable[]] $MemberDefinitions = @(
+        @{
+            MemberType  = 'ScriptProperty'
+            MemberName  = 'Path'
+            Value       = { $this._path }
+            SecondValue = {
+                $ProposedValue = $args[0]
+                if (Test-Path $ProposedValue) {
+                    if ($ProposedValue -notmatch '\\$') { $ProposedValue += '\' }
+                    $ProposedValue += 'Windows Kits'
+                    $this._path = $ProposedValue
+                    $this._path2 = $ProposedValue.Replace('\', '\\')
+                }
+                else { throw }
             }
-            else {
-                if ($str -like "*$($SD[0])*") {
-                    $bodyFind = $true
+        }
+        @{
+            MemberType = 'ScriptProperty'
+            MemberName = 'RegPath'
+            Value      = { $this._path2 }
+        }
+    )
+
+    static FilePath() {
+        $TypeName = [FilePath].Name
+        foreach ($Definition in [FilePath]::MemberDefinitions) {
+            Update-TypeData -TypeName $TypeName @Definition
+        }
+    }
+}
+
+class Main {
+    [FilePath]$Source = [FilePath]::new()
+    [FilePath]$Destination = [FilePath]::new()
+    [string]$BackupPath = "BackupLog$(Get-Date -Format 'yyMMddhhmmss').reg"
+    [string]$OutPath = "ChangeLog$(Get-Date -Format 'yyMMddhhmmss').reg"
+
+    static [void] Start() {
+        [RuntimeCheck]::Execute()
+        Set-Location $PSScriptRoot
+        if (-not (Test-Path tmp)) { New-Item tmp -ItemType Directory }
+        else { Remove-Item tmp\* }
+        
+        [Main]$info = [Main]::new()
+        try {
+            $info.Source.Path = (Read-Host '  原路径')
+            $info.Destination.Path = (Read-Host '目标路径')
+        }
+        catch {
+            Write-Host '错误：输入的文件路径不合法' -ForegroundColor Red
+            exit
+        }
+        $info.GetReg()
+        $info.ExtractReg()
+        $info.ImportReg()
+        $info.MoveFile()
+    }
+
+    [void] GetReg() {
+        Write-Host '获取系统注册表中，请等待'
+        [int[]]$proId = @()
+        @('HKLM', 'HKCU', 'HKCR', 'HKU', 'HKCC') | ForEach-Object {  
+            $proId += (Start-Process $env:ComSpec "/c ""reg export $_ tmp\$_.reg""" -WorkingDirectory $PWD -WindowStyle Hidden -PassThru).Id
+        }
+        Wait-Process $proId
+        Write-Host '完成' -ForegroundColor Green
+    }
+
+    [void] ExtractReg() {
+        [string]$str = ''
+        [string[]]$strArr = @()
+        [string[]]$strArrB = @()
+        [bool]$bodyFind = $false
+
+        Write-Host '提取关键注册表中，请等待'
+        "Windows Registry Editor Version 5.00`n" | Out-File $this.OutPath -Encoding unicode
+        "Windows Registry Editor Version 5.00`n" | Out-File $this.BackupPath -Encoding unicode
+        Get-ChildItem tmp\*.reg | ForEach-Object {
+            foreach ($s in [System.IO.File]::ReadLines($_.FullName, [System.Text.Encoding]::Unicode)) {
+                $str = $s
+                if ($str[0] -eq '[') {
+                    if ($bodyFind) {
+                        $bodyFind = $false
+                        $strArr += ''
+                        $strArr | Out-File $this.OutPath -Encoding unicode -Append
+                        $strArrB += ''
+                        $strArrB | Out-File $this.BackupPath -Encoding unicode -Append
+                    }
+                    $strArr = @()
+                    $strArr += $str
+                    $strArrB = @()
                     $strArrB += $str
-                    $strArr += $str.Replace($SD[0], $SD[1])
+                }
+                else {
+                    if ($str -like "*$($this.Source.RegPath)*") {
+                        $bodyFind = $true
+                        $strArr += $str.Replace($this.Source.RegPath, $this.Destination.RegPath)
+                        $strArrB += $str
+                    }
+                    elseif ($str -like "*$($this.Source.Path)*") {
+                        $bodyFind = $true
+                        $strArr += $str.Replace($this.Source.Path, $this.Destination.RegPath)
+                        $strArrB += $str.Replace($this.Source.Path, $this.Source.RegPath)
+                    }
                 }
             }
         }
-        # Prevent missing the last piece of data
         if ($bodyFind) {
-            $strArrB | Out-File $backupFile -Encoding unicode -Append 
-            $strArr | Out-File $outFile -Encoding unicode -Append 
+            # 防止遗漏数据
+            $strArr | Out-File $this.OutPath -Encoding unicode -Append
+            $strArrB | Out-File $this.BackupPath -Encoding unicode -Append
+        }
+        if ((Get-Item $this.OutPath).Length -le 88) {
+            Write-Host '错误：提取失败，请重试' -ForegroundColor Red
+            Remove-Item $this.OutPath, $this.BackupPath
+            exit
+        }
+        Write-Host '完成' -ForegroundColor Green
+    }
+
+    [void] ImportReg() {
+        Write-Host '导入重组注册表'
+        try {
+            Start-Process "$env:windir\regedit.exe" -ArgumentList "/s $($this.OutPath)" -Wait -PassThru
+        }
+        catch {
+            Write-Host '错误：导入失败，请重试' -ForegroundColor Red
+            exit
+        }
+        Write-Host '完成' -ForegroundColor Green
+    }
+
+    [void] MoveFile() {
+        Write-Host '移动 Windows Kits 文件夹中，请等待'
+        if (Test-Path $this.Source.Path) {
+            Move-Item $this.Source.Path $this.Destination.Path
+            Write-Host '完成' -ForegroundColor Green
+        }
+        else {
+            Write-Host "异常：未找到'$($this.Source.Path)'，请手动将文件夹移入目标位置" -ForegroundColor Red
         }
     }
-    if ((Get-Item $outFile).Length -le 76) {
-        Write-Host 'ERROR: Extraction failed, please try again' -ForegroundColor Red
-        exit
-    }
-    Write-Host 'OK' -ForegroundColor Green
 }
 
-<# Move and Import #>
-& {
-    Write-Host 'Try to move directory'
-    foreach ($i in 0..1) { $SD[$i] = $SD[$i].Replace('\\', '\') }
-    if (Test-Path $SD[0]) {
-        Move-Item $SD[0] $SD[1]
-        Write-Host 'OK' -ForegroundColor Green
-    }
-    else {
-        Write-Host "ERROR: Not found '$($SD[0])', Please manually move the directory" -ForegroundColor Red
-    }
-
-    Write-Host 'Import reorganization registry' -ForegroundColor Yellow
-    reg import $outFile
-    Remove-Item tmp -Recurse
-}
+[Main]::Start()

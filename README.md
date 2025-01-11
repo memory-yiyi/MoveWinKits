@@ -18,6 +18,10 @@ For example, if "D:\\Windows Kits", you should enter "D:\\".<br>
 ### Note
 You can check the problem through `BackupLogxxx.reg` and report it to the Issue to make the script more comprehensive.
 ## Version Log
+### V2.4
+* 使用中文，但在此版本之前的相关文件不予更改
+* 修复注册表导入失败时，文件夹能被移动的问题
+* 优化了代码结构，脚本运行更加稳定
 ### V2.3
 * Add running checks to reduce the possibility of movement failure.
 ### V2.2
