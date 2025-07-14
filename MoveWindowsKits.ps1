@@ -59,8 +59,8 @@ class FilePath {
 class Main {
     [FilePath]$Source = [FilePath]::new()
     [FilePath]$Destination = [FilePath]::new()
-    [string]$BackupPath = "BackupLog$(Get-Date -Format 'yyMMddhhmmss').reg"
-    [string]$OutPath = "ChangeLog$(Get-Date -Format 'yyMMddhhmmss').reg"
+    [string]$BackupPath = "BackupLog$(Get-Date -Format 'yyMMddHHmmss').reg"
+    [string]$OutPath = "ChangeLog$(Get-Date -Format 'yyMMddHHmmss').reg"
 
     static [void] Start() {
         [RuntimeCheck]::Execute()

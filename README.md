@@ -4,7 +4,7 @@ Move the "Windows Kits" folder without causing serious errors.
 1. Download the code into a new folder.
 2. Run the following code as an administrator.
 ```shell
-PowerShell -NoExit -File .\MoveWindowsKits.ps1 -ExecutionPolicy Bypass
+PowerShell -NoExit -ExecutionPolicy RemoteSigned -File .\MoveWindowsKits.ps1
 ```
 3. Enter the path <font color=red>(please see [Note](#note) for input rules)</font> and wait for the program to run.
 ### <span id='note'>Note</span>
